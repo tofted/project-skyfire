@@ -1,0 +1,67 @@
+// Skyfire — Cloud Firestore security rules.
+// Publish these in the Firebase console: Build → Firestore Database → Rules → paste → Publish.
+//
+// What they allow:
+//   • anyone may READ the leaderboards and pilot names (the boards are public)
+//   • a signed-in pilot may write only their OWN player document and their OWN row on each board
+//   • a row must have exactly the expected fields, with sane types and ranges, and its timestamp must be the
+//     server's time; a stored score can go up (or be re-saved with a new name), never down
+//
+// What they cannot do: prove a score was really flown. Scores are worked out in the browser, so somebody determined
+// can post a made-up one inside the limits below. That is fine for a board among friends; a cheat-proof board needs
+// a server that replays or validates runs (Cloud Functions — not on the free plan).
+// The limits are mirrored in src/online/names.js (SCORE_CAP, NAME_MIN / NAME_MAX, MAX_LEVEL): change both together.
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function validName(n) { return n is string && n.size() >= 3 && n.size() <= 16; }
+
+    // The highest score each board accepts.
+    function scoreCap(board) {
+      return board == 'story' ? 200000 : (board == 'titan' ? 80000 : 5000000);
+    }
+
+    function validScore(board, uid) {
+      let d = request.resource.data;
+      return isOwner(uid)
+        && board in ['story', 'titan', 'survival']
+        && d.keys().hasOnly(['uid', 'name', 'score', 'grade', 'time', 'kills', 'combo', 'level', 'wave', 'outcome', 'at', 'v'])
+        && d.keys().hasAll(['uid', 'name', 'score', 'time', 'kills', 'level', 'at'])
+        && d.uid == uid
+        && validName(d.name)
+        && d.score is int && d.score >= 0 && d.score <= scoreCap(board)
+        && d.time is number && d.time >= 0 && d.time <= 86400
+        && d.kills is int && d.kills >= 0 && d.kills <= 100000
+        && d.level is int && d.level >= 1 && d.level <= 15
+        && d.at == request.time;
+    }
+
+    // players/{uid} — the pilot's public profile and stage progress.
+    match /players/{uid} {
+      allow read: if true;
+      allow create, update: if isOwner(uid)
+        && validName(request.resource.data.name)
+        && request.resource.data.keys().hasOnly(['name', 'nameLower', 'created', 'updated', 'stage', 'stageTimes'])
+        && (!('stage' in request.resource.data)
+            || (request.resource.data.stage is int && request.resource.data.stage >= 0 && request.resource.data.stage <= 20));
+      allow delete: if isOwner(uid);
+    }
+
+    // boards/{board}/scores/{uid} — one row per pilot and board: that pilot's best run.
+    match /boards/{board}/scores/{uid} {
+      allow read: if true;
+      allow create: if validScore(board, uid);
+      allow update: if validScore(board, uid) && request.resource.data.score >= resource.data.score;
+      allow delete: if isOwner(uid);
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

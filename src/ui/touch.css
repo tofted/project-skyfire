@@ -1,0 +1,141 @@
+/* Touch layout (src/ui/touch.js, system 'touchUI'): floating stick bottom-left, the thumb arc of buttons bottom-right.
+   Sizes and positions are computed in JS on resize (clamp(px, vmin, px): the same proportions at 1080p and 4K) and set
+   as width / height / transform once; per frame only transforms, class toggles and ring offsets change.
+   The overlay is inert (pointer-events: none) except the buttons; the stick and aim work from window listeners. */
+.tch {
+  --tch-fill: rgba(9, 18, 46, .46); --tch-fill-down: rgba(34, 58, 128, .66); --tch-line: rgba(255, 246, 225, .74);
+  --tch-ink: #fffaf0; --tch-track: rgba(255, 246, 225, .16); --tch-gold: #ffc870; --tch-amber: #f08a2a;
+  --tch-heat: #ffc94a; --tch-hot: #ff4a3a; --tch-stam: #7fe3ff; --tch-el: #ffc870;
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; visibility: hidden;
+  transition: opacity .22s ease, visibility 0s linear .22s;
+  font-family: var(--f-ui, "Avenir Next", "Segoe UI", system-ui, sans-serif);
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none;
+}
+.tch.on { opacity: 1; visibility: visible; transition: opacity .22s ease; }
+/* touches that start on the HUD's own (non-control) layers must never become a browser pan */
+body.touch-mode #ui > .hud { touch-action: none; }
+
+/* ------------------------------------------------------------------ stick */
+.tch-stick { position: absolute; left: 0; top: 0; }
+.tch-base {
+  position: absolute; left: 0; top: 0; width: calc(var(--tch-r, 110px) * 2); height: calc(var(--tch-r, 110px) * 2);
+  border-radius: 50%; border: 2px solid var(--tch-line);
+  background: radial-gradient(circle, rgba(9, 18, 46, .16) 0, rgba(9, 18, 46, .34) 64%, rgba(9, 18, 46, .5) 100%);
+  box-shadow: 0 0 0 1px rgba(6, 12, 34, .25), 0 4px 18px rgba(6, 12, 34, .3);
+  will-change: transform; transition: opacity .18s ease;
+}
+.tch-stick.idle .tch-base { opacity: .34; }
+.tch-knob {
+  position: absolute; left: 50%; top: 50%;
+  width: calc(var(--tch-r, 110px) * .84); height: calc(var(--tch-r, 110px) * .84);
+  margin: calc(var(--tch-r, 110px) * -.42) 0 0 calc(var(--tch-r, 110px) * -.42); border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, rgba(255, 250, 240, .96), rgba(255, 236, 196, .78) 52%, rgba(242, 196, 90, .62) 100%);
+  box-shadow: 0 2px 10px rgba(6, 12, 34, .45); will-change: transform;
+}
+.tch-stick.idle .tch-knob { opacity: .55; }
+/* four direction ticks: lit while the matching key is held (up W, right D, down S, left A) */
+.tch-dir { position: absolute; width: 0; height: 0; border: calc(var(--tch-r, 110px) * .085) solid transparent; opacity: .5; }
+.tch-dir.n { left: 50%; top: 5%; margin-left: calc(var(--tch-r, 110px) * -.085); border-top-width: 0; border-bottom-color: var(--tch-ink); }
+.tch-dir.s { left: 50%; bottom: 5%; margin-left: calc(var(--tch-r, 110px) * -.085); border-bottom-width: 0; border-top-color: var(--tch-ink); }
+.tch-dir.w { top: 50%; left: 5%; margin-top: calc(var(--tch-r, 110px) * -.085); border-left-width: 0; border-right-color: var(--tch-ink); }
+.tch-dir.e { top: 50%; right: 5%; margin-top: calc(var(--tch-r, 110px) * -.085); border-right-width: 0; border-left-color: var(--tch-ink); }
+.tch-dir.on { opacity: 1; }
+.tch-dir.n.on { border-bottom-color: var(--tch-gold); }
+.tch-dir.s.on { border-top-color: var(--tch-gold); }
+.tch-dir.w.on { border-right-color: var(--tch-gold); }
+.tch-dir.e.on { border-left-color: var(--tch-gold); }
+/* the look-pitch vertical (no UP / DOWN buttons): while the stick holds Space (look up + push: rise / a power beat) or
+   Ctrl (look down + push: sink / dive) the knob shows a chevron that way */
+.tch-knob::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 34%; height: 34%; margin: -17% 0 0 -17%;
+  border: solid rgba(20, 38, 92, .9); border-width: 0 0 calc(var(--tch-r, 110px) * .055) calc(var(--tch-r, 110px) * .055);
+  opacity: 0; transition: opacity .12s ease, transform .12s ease; transform: translateY(12%) rotate(135deg);
+}
+.tch-stick.rise .tch-knob::after { opacity: 1; transform: translateY(12%) rotate(135deg); }
+.tch-stick.sink .tch-knob::after { opacity: 1; transform: translateY(-12%) rotate(-45deg); }
+.tch-stick.rise .tch-knob { box-shadow: 0 0 0 3px rgba(127, 227, 255, .75), 0 2px 10px rgba(6, 12, 34, .45); }
+.tch-stick.sink .tch-knob { box-shadow: 0 0 0 3px rgba(255, 170, 80, .8), 0 2px 10px rgba(6, 12, 34, .45); }
+
+/* ------------------------------------------------------------------ buttons */
+.tch-btns { position: absolute; inset: 0; }
+.tb {
+  position: absolute; left: 0; top: 0; width: 100px; height: 100px; border-radius: 50%;
+  pointer-events: auto; touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.tb::after { content: ""; position: absolute; inset: -8%; border-radius: 50%; }      /* a slightly larger touch target */
+.tb-in {
+  position: absolute; inset: 0; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5%; color: var(--tch-ink); background: var(--tch-fill); border: 2px solid var(--tch-line);
+  box-shadow: 0 2px 12px rgba(6, 12, 34, .34); transition: transform .07s ease-out, background-color .07s ease-out, opacity .2s ease;
+}
+.tb-in::before {                                        /* the glow of a ready INFERNO / a full charge (opacity only) */
+  content: ""; position: absolute; inset: -10%; border-radius: 50%; opacity: 0; pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 216, 120, 0) 52%, rgba(255, 200, 90, .55) 64%, rgba(255, 170, 60, 0) 76%);
+}
+.tb.down .tb-in { transform: scale(.92); background: var(--tch-fill-down); border-color: #fff; }
+.tb-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; pointer-events: none; }
+.tb-track { fill: none; stroke: var(--tch-track); stroke-width: 4.5; }
+.tb-arc { fill: none; stroke: var(--tch-gold); stroke-width: 5.5; stroke-linecap: round; stroke-dasharray: 100 100; stroke-dashoffset: 100; }
+.tb-lock .tb-ring, .tb-dodgeL .tb-ring, .tb-dodgeR .tb-ring { display: none; }
+.tb-icw { display: block; width: 40%; height: 40%; position: relative; }
+.tb.big .tb-icw { width: 38%; height: 38%; }
+.tb-ic { display: block; width: 100%; height: 100%; filter: drop-shadow(0 1px 1.5px rgba(6, 12, 34, .7)); }
+.tb-lb {
+  position: relative; font: 700 var(--tch-fs, 13px)/1 var(--f-ui, system-ui, sans-serif); letter-spacing: .12em; padding-left: .12em;
+  white-space: nowrap; text-shadow: 0 1px 2px rgba(6, 12, 34, .85);
+}
+.tb.big .tb-lb { font-size: var(--tch-fs-big, 16px); letter-spacing: .16em; padding-left: .16em; }
+
+/* FIRE: the heat ring; hot, then OVERHEAT (red, pulsing) */
+.tb-fire .tb-arc { stroke: var(--tch-heat); }
+.tb-fire.warm .tb-arc { stroke: #ff9a3a; }
+.tb-fire.over .tb-in { border-color: var(--tch-hot); background: rgba(92, 14, 16, .6); }
+.tb-fire.over .tb-arc { stroke: var(--tch-hot); }
+.tb-fire.over .tb-lb { color: #ffd2cc; }
+.tb-fire.over .tb-in::before { background: radial-gradient(circle, rgba(255, 70, 50, 0) 52%, rgba(255, 70, 50, .6) 64%, rgba(255, 70, 50, 0) 76%); animation: tch-pulse .5s ease-in-out infinite alternate; }
+
+/* FIREBALL / BOLT: the recharge ring, the charge while held; charge pips on top */
+.tb-fireball .tb-arc { stroke: var(--tch-amber); }
+.tb-fireball.cool .tb-arc { stroke-opacity: .6; }
+.tb-fireball.empty .tb-in { opacity: .62; }
+.tb-fireball.charging .tb-arc { stroke: #ffe7a3; }
+.tb-fireball.full .tb-arc { stroke: #fff; }
+.tb-fireball.full .tb-in::before { opacity: 1; }
+.tb-pips { position: absolute; left: 0; right: 0; top: 11%; display: flex; justify-content: center; gap: 6%; }
+.tb-pips i { display: block; width: 9%; aspect-ratio: 1; border-radius: 50%; border: 1px solid rgba(255, 246, 225, .7); background: rgba(255, 246, 225, .14); }
+.tb-pips i.full { background: var(--tch-amber); border-color: #ffe7a3; }
+.tb-pips i.off { display: none; }
+
+/* INFERNO / SURGE: dim until the meter is full, then glowing; drains while it burns. Element colours. */
+.tb-inferno[data-el="ember"] { --tch-el: #ffc870; }
+.tb-inferno[data-el="azure"] { --tch-el: #6fc8ff; }
+.tb-inferno[data-el="radiant"] { --tch-el: #fff2b0; }
+.tb-inferno[data-el="lightning"] { --tch-el: #c9b8ff; }
+.tb-inferno[data-el="storm"] { --tch-el: #b8dcff; }
+.tb-inferno .tb-arc { stroke: var(--tch-el); }
+.tb-inferno.dim .tb-in { opacity: .58; }
+.tb-inferno.ready .tb-in { border-color: var(--tch-el); background: rgba(96, 58, 12, .6); }
+.tb-inferno.ready .tb-in::before { opacity: 1; animation: tch-pulse .8s ease-in-out infinite alternate; }
+.tb-inferno.ready .tb-ic { color: var(--tch-el); }
+.tb-inferno.burn .tb-in { border-color: #fff; background: rgba(120, 80, 20, .66); }
+.tb-inferno.burn .tb-arc { stroke: #fff; }
+
+/* BOOST: the stamina ring */
+.tb-boost .tb-arc { stroke: var(--tch-stam); }
+.tb-boost.low .tb-arc { stroke: var(--tch-hot); }
+.tb-dodgeL.low .tb-in, .tb-dodgeR.low .tb-in { opacity: .6; }
+
+/* LOCK: lit while a target is locked */
+.tb-lock.on .tb-in { border-color: var(--tch-gold); }
+.tb-lock.on .tb-ic { color: var(--tch-gold); }
+
+@keyframes tch-pulse { from { opacity: .35; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .tb-in::before { animation: none !important; }
+}
+
+/* Russian (languages, 29.09; :root[lang="ru"] only): Cyrillic capitals are wider than Latin ones — \418 \41D \424 \415 \420 \41D \41E  (7 letters) ran
+   past the 64 px button of a phone in the UI face. The labels take the condensed numbers' face (styles.css --f-num: Arial
+   Narrow Bold, Cyrillic) at the same size, so they stay as large as the English ones (TV legibility) and clear of the rings */
+:root[lang="ru"] .tb-lb { font-family: var(--f-num, "Arial Narrow", sans-serif); letter-spacing: .1em; padding-left: .1em; }
+:root[lang="ru"] .tb.big .tb-lb { letter-spacing: .14em; padding-left: .14em; }

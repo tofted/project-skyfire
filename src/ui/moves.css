@@ -1,0 +1,245 @@
+@charset "utf-8";
+/* Flight-move HUD (src/ui/moves.js, system movesHud) — injected by moves.js; lives inside .hud-fly, so it shows and
+   hides with the flight HUD (cinematics, photo mode). Palette and fonts come from styles.css (:root variables).
+   Per frame only transform / opacity / CSS variables change; flashes are short Web Animations. */
+.mvh { position: absolute; inset: 0; pointer-events: none; }
+
+/* ---------------------------------------------------------------- reticle companion (follows .ret) */
+.mv-ret { position: absolute; left: 0; top: 0; width: 132px; height: 132px; margin: -66px 0 0 -66px; will-change: transform; }
+.mv-ret svg { width: 100%; height: 100%; overflow: visible; }
+/* momentum: the bottom gap between the heat (left) and stamina (right) arcs */
+.mv-ret .mm-bg, .mv-ret .mm-fill, .mv-ret .mm-tick { opacity: 0; transition: opacity .2s ease, stroke .15s; }
+.mv-ret.m-on .mm-bg, .mv-ret.m-on .mm-fill, .mv-ret.m-on .mm-tick { opacity: 1; }
+.mv-ret .mm-bg { fill: none; stroke: rgba(8, 14, 40, .45); stroke-width: 5; stroke-linecap: round; }
+.mv-ret .mm-fill { fill: none; stroke: #cfefff; stroke-width: 3.5; stroke-linecap: round; }
+.mv-ret .mm-glow { fill: none; stroke: #ffb020; stroke-width: 7.5; stroke-linecap: round; opacity: 0; transition: opacity .15s; }
+.mv-ret .mm-tick { stroke: rgba(255, 250, 240, .85); stroke-width: 2; stroke-linecap: round; }
+/* past 50 %: white with a gold edge + gold tick — pull up now for SKYFALL */
+.mv-ret.m-on.m-ready .mm-fill { stroke: #ffffff; }
+.mv-ret.m-on.m-ready .mm-glow { opacity: .75; }
+.mv-ret.m-ready .mm-tick { stroke: #ffcf40; }
+/* the buff: white-gold, draining, over an orange edge */
+.mv-ret.m-sky .mm-fill { stroke: #fff6d0; stroke-width: 4.5; }
+.mv-ret.m-on.m-sky .mm-glow { opacity: 1; stroke: #ff7a1a; stroke-width: 8.5; }
+.mv-ret.m-sky .mm-bg { stroke: rgba(90, 40, 0, .5); stroke-width: 7; }
+.mv-ret.m-sky .mm-tick { opacity: 0; }
+/* the stamina a move spent (flash on the reticle's stamina arc) and "no stamina" */
+.mv-ret .mm-cost { fill: none; stroke: #ffffff; stroke-width: 6; stroke-linecap: butt; opacity: 0; }
+.mv-ret .mm-deny { fill: none; stroke: #ff4d6d; stroke-width: 5.5; stroke-linecap: round; opacity: 0; }
+/* fireball charge: 16 segments on an outer ring */
+.mv-ret .cg-ring { opacity: 0; transition: opacity .12s ease; transform-origin: 66px 66px; }
+.mv-ret.c-on .cg-ring { opacity: 1; }
+.mv-ret .cg-bk { fill: none; stroke: rgba(20, 8, 30, .22); stroke-width: 6; }
+.mv-ret .cg-bk.on { stroke: rgba(40, 12, 0, .7); stroke-width: 7; }
+.mv-ret .cg { fill: none; stroke: rgba(255, 255, 255, .16); stroke-width: 3; }
+.mv-ret .cg.on { stroke: #ffa53a; stroke-width: 4; }
+.mv-ret.c-max .cg.on { stroke: #fff4c8; stroke-width: 4.5; }
+.mv-ret.c-on.c-max .cg-ring { animation: mvmax .32s ease-in-out infinite alternate; }
+@keyframes mvmax { from { opacity: .72; } to { opacity: 1; } }
+/* small labels inside the reticle, clear of its brackets and arcs (and of its own IN RANGE / OVERHEAT pill below) */
+.mv-rl { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; opacity: 0; transition: opacity .15s ease;
+  font: 800 italic 11px/1 var(--f-num, sans-serif); letter-spacing: .14em; padding-left: .14em; color: #fff; -webkit-text-stroke: 3px #1b1030; paint-order: stroke fill; }
+.mv-rl.sky { top: 90px; color: var(--gold-hi, #ffe7a3); }
+.mv-rl.max { top: 31px; color: #fff4c8; }
+.mv-ret.sky-lbl .mv-rl.sky { opacity: .85; }
+.mv-ret.m-sky.sky-lbl .mv-rl.sky { opacity: 1; color: #fff; -webkit-text-stroke-color: #7a2e00; }
+.mv-ret.max-lbl .mv-rl.max { opacity: 1; }
+
+/* ---------------------------------------------------------------- special meter (R), left of the skill buttons */
+.mv-sp { position: absolute; left: 0; top: 0; width: 58px; height: 58px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center;
+  background: rgba(9, 18, 46, .6); box-shadow: inset 0 0 0 1.5px rgba(255, 246, 225, .55); opacity: 0; transition: opacity .3s ease; pointer-events: none; will-change: transform; }
+.mv-sp.on { opacity: 1; }
+.mvh.touch .mv-sp { width: 64px; height: 64px; }
+.mvh.touch .mv-sp.on { pointer-events: auto; touch-action: none; cursor: pointer; }
+.mv-sp .sp-ring { position: absolute; inset: -4px; border-radius: 50%;
+  background: conic-gradient(var(--sc, #ff9a3a) calc(var(--v, 0) * 360deg), rgba(255, 255, 255, .08) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px)); }
+.mv-sp .sp-aura { position: absolute; inset: -14px; border-radius: 50%; opacity: 0;
+  background: radial-gradient(closest-side, rgba(255, 244, 200, .0) 52%, rgba(255, 214, 110, .75) 70%, rgba(255, 120, 40, .35) 84%, rgba(255, 120, 40, 0) 100%); }
+.mv-sp svg.ic { position: relative; width: 56%; height: 56%; fill: none; stroke: #fffaf0; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 30, .6)); opacity: .55; transition: opacity .2s; }
+.mv-sp .key { position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%); min-width: 22px; padding: 2px 5px 1px; border-radius: 3px; background: rgba(6, 12, 34, .88);
+  border: 1px solid rgba(255, 238, 200, .5); font: 700 10px/1.2 var(--f-ui, sans-serif); letter-spacing: .04em; white-space: nowrap; text-align: center; color: #fffaf0; }
+.mvh.touch .mv-sp .key { display: none; }
+/* the caption ends at the button's right edge (centred it ran into the Q / E button's ring) */
+.mv-sp .sp-cap { position: absolute; bottom: calc(100% + 9px); right: 0; white-space: nowrap; opacity: 0; transition: opacity .2s;
+  font: 800 italic 13px/1 var(--f-num, sans-serif); letter-spacing: .16em; padding: 3px 7px 2px 9px; border-radius: 2px; background: rgba(40, 10, 0, .62);
+  color: #fff4c8; -webkit-text-stroke: 3px #5a1400; paint-order: stroke fill; }
+.mv-sp.full .sp-cap::after { content: "\00a0\00a0\2014\00a0\00a0R"; color: #ffffff; }
+.mvh.touch .mv-sp.full .sp-cap::after { content: ""; }
+.mv-sp.full { --sc: #fff1b8; box-shadow: inset 0 0 0 1.5px rgba(255, 246, 225, .95), 0 0 18px rgba(255, 200, 90, .55); }
+.mv-sp.full svg.ic, .mv-sp.burn svg.ic { opacity: 1; stroke: #fff4c8; }
+.mv-sp.full .sp-cap, .mv-sp.burn .sp-cap { opacity: 1; }
+.mv-sp.full .sp-aura { animation: mvaura .7s ease-in-out infinite alternate; }
+.mv-sp.burn { --sc: #ffffff; }
+.mv-sp.burn .sp-aura { opacity: 1; animation: mvburn .16s steps(2) infinite alternate; }
+.mv-sp.burn .sp-cap { color: #fff; animation: mvburn .22s steps(2) infinite alternate; }
+.mv-sp.denied { animation: mvshake .36s linear; }
+/* levels and elements: the meter, its glow and caption in the colours of what R does (ember = the rules above) */
+.mv-sp.el-azure { --sc: #4fa8ff; }
+.mv-sp.el-radiant { --sc: #ffd24a; }
+.mv-sp.el-lightning, .mv-sp.el-storm { --sc: #62e2ff; }
+.mv-sp.el-storm .sp-ring { background: conic-gradient(from 0deg, #ffcc3a 0, #62e2ff calc(var(--v, 0) * 360deg), rgba(255, 255, 255, .08) 0); }
+.mv-sp.full.el-azure { --sc: #d4ecff; box-shadow: inset 0 0 0 1.5px rgba(225, 240, 255, .95), 0 0 18px rgba(80, 160, 255, .6); }
+.mv-sp.full.el-radiant { --sc: #fffbe6; box-shadow: inset 0 0 0 1.5px rgba(255, 250, 230, .95), 0 0 20px rgba(255, 220, 120, .65); }
+.mv-sp.full.el-lightning, .mv-sp.full.el-storm { --sc: #effdff; box-shadow: inset 0 0 0 1.5px rgba(225, 250, 255, .95), 0 0 18px rgba(100, 220, 255, .6); }
+.mv-sp.full.el-storm .sp-ring { background: conic-gradient(#ffe07a 0, #effdff 50%, #ffe07a 100%); }
+.mv-sp.el-azure .sp-aura { background: radial-gradient(closest-side, rgba(220, 240, 255, 0) 52%, rgba(120, 190, 255, .78) 70%, rgba(40, 90, 255, .35) 84%, rgba(40, 90, 255, 0) 100%); }
+.mv-sp.el-lightning .sp-aura { background: radial-gradient(closest-side, rgba(230, 252, 255, 0) 52%, rgba(120, 232, 255, .8) 70%, rgba(50, 110, 255, .35) 84%, rgba(50, 110, 255, 0) 100%); }
+.mv-sp.el-storm .sp-aura { background: radial-gradient(closest-side, rgba(255, 250, 230, 0) 50%, rgba(255, 214, 110, .7) 64%, rgba(110, 205, 255, .6) 78%, rgba(50, 110, 255, 0) 100%); }
+.mv-sp.el-azure.full svg.ic, .mv-sp.el-azure.burn svg.ic { stroke: #e4f3ff; }
+.mv-sp.el-lightning.full svg.ic, .mv-sp.el-lightning.burn svg.ic, .mv-sp.el-storm.full svg.ic, .mv-sp.el-storm.burn svg.ic { stroke: #effdff; }
+.mv-sp.el-azure .sp-cap { background: rgba(4, 14, 52, .66); color: #e0f0ff; -webkit-text-stroke-color: #0a2470; }
+.mv-sp.el-radiant .sp-cap { background: rgba(46, 26, 0, .62); color: #fffbe6; -webkit-text-stroke-color: #6a3a00; }
+.mv-sp.el-lightning .sp-cap, .mv-sp.el-storm .sp-cap { background: rgba(4, 12, 48, .68); color: #effdff; -webkit-text-stroke-color: #0c2a80; }
+.mv-sp.el-storm .sp-cap { color: #fff3c0; }
+@keyframes mvaura { from { opacity: .4; transform: scale(.94); } to { opacity: 1; transform: scale(1.1); } }
+@keyframes mvburn { from { opacity: .7; } to { opacity: 1; } }
+@keyframes mvshake { 20% { margin-left: -4px; } 40% { margin-left: 4px; } 60% { margin-left: -3px; } 80% { margin-left: 2px; } }
+
+/* ---------------------------------------------------------------- touch: FLY (holds W), above the R button */
+.mv-fly { position: absolute; left: 0; top: 0; width: 64px; height: 64px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center;
+  background: rgba(9, 18, 46, .6); box-shadow: inset 0 0 0 1.5px rgba(191, 244, 255, .6); opacity: 0; transition: opacity .3s ease, background .12s; pointer-events: none; will-change: transform; }
+.mv-fly.on { opacity: 1; pointer-events: auto; touch-action: none; cursor: pointer; }
+.mv-fly svg.ic { width: 52%; height: 52%; margin-top: -8px; fill: none; stroke: #dff8ff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 1px rgba(0, 0, 30, .6)); }
+.mv-fly .fl-cap { position: absolute; bottom: 9px; font: 800 10px/1 var(--f-ui, sans-serif); letter-spacing: .24em; padding-left: .24em; color: #dff8ff; }
+.mv-fly.pressed, .mv-fly.flying { background: rgba(255, 196, 90, .42); box-shadow: inset 0 0 0 2px #ffe7a3, 0 0 16px rgba(255, 200, 90, .55); }
+.mv-fly.flying svg.ic, .mv-fly.flying .fl-cap { stroke: #fff4c8; color: #fff4c8; }
+
+/* ---------------------------------------------------------------- ring around the F button while charging */
+.mv-fring { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity .12s ease; will-change: transform; }
+.mv-fring.on { opacity: 1; }
+.mv-fring i { position: absolute; left: -38px; top: -38px; width: 76px; height: 76px; border-radius: 50%;
+  background: conic-gradient(#ffb347 calc(var(--v, 0) * 360deg), rgba(8, 14, 40, .42) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4.5px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4.5px), #000 calc(100% - 4px)); }
+.mv-fring.max i { background: conic-gradient(#fff4c8 360deg, #fff4c8 0); animation: mvmax .32s ease-in-out infinite alternate; }
+
+/* ---------------------------------------------------------------- move call-outs (bottom-left stack) */
+.mv-bn { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; }
+.mv-b { position: absolute; left: 0; bottom: 0; display: flex; flex-direction: column; align-items: flex-start; white-space: nowrap; opacity: 0;
+  transform-origin: left bottom; transition: transform .2s ease-out, opacity .2s ease-out;
+  --kf: linear-gradient(180deg, #fff 0%, #f2fbff 38%, #bfeaff 40%, #58b8ff 100%); --ko: #0c1f5c; --kc: #7fe3ff; --ks: #d8f4ff; font-size: 34px; }
+.mv-bn.right .mv-b { left: auto; right: 0; align-items: flex-end; transform-origin: right bottom; }
+.mv-b.out, .mv-b.fade { opacity: 0 !important; }
+.mv-b.old .mb-s, .mv-b.old .mb-bar { display: none; }
+.mv-b.old .mb-plate { bottom: .06em; }
+.mv-b .mb-plate { position: absolute; left: -16px; right: -30px; top: .12em; bottom: -2px; transform: skewX(-18deg); border-left: 3px solid var(--kc);
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .06) 0 1px, rgba(255, 255, 255, 0) 1px 5px),
+    linear-gradient(90deg, rgba(9, 18, 46, .74) 0, rgba(9, 18, 46, .6) 70%, rgba(9, 18, 46, 0) 100%); }
+.mv-bn.right .mv-b .mb-plate { left: -30px; right: -12px; border-left: 0; border-right: 3px solid var(--kc);
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .06) 0 1px, rgba(255, 255, 255, 0) 1px 5px),
+    linear-gradient(270deg, rgba(9, 18, 46, .74) 0, rgba(9, 18, 46, .6) 70%, rgba(9, 18, 46, 0) 100%); }
+.mv-b .mb-tx { position: relative; display: block; transform: skewX(-8deg); }
+/* a thick dark outline layer + the gradient fill on top (the fill is the same text from data-t) */
+.mv-b .mb-t { position: relative; display: block; font: italic 900 1em/1.02 "Avenir Next Condensed", Futura, Impact, "Arial Black", sans-serif; letter-spacing: .02em; padding: 0 .12em 0 .04em;
+  color: var(--ko); -webkit-text-stroke: .2em var(--ko); paint-order: stroke fill; text-shadow: .04em .1em 0 rgba(6, 10, 30, .55); }
+.mv-b .mb-t::after { content: attr(data-t); position: absolute; left: .04em; top: 0; -webkit-text-stroke: 0; text-shadow: none;
+  background: var(--kf); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
+.mv-b .mb-s { position: relative; margin: 3px 0 0 8px; font: 800 11px/1.2 var(--f-ui, sans-serif); letter-spacing: .2em; color: var(--ks);
+  text-shadow: 0 1px 2px rgba(6, 12, 34, .95), 0 0 8px rgba(6, 12, 34, .7); }
+.mv-b .mb-s:empty { display: none; }
+.mv-bn.right .mv-b .mb-s { margin: 3px 8px 0 0; }
+.mv-b .mb-bar { display: none; position: relative; width: 110px; height: 3px; margin: 4px 0 1px 8px; transform-origin: left; background: var(--kc); box-shadow: 0 0 6px var(--kc); }
+.mv-b.held .mb-bar { display: block; }
+/* kinds */
+.mv-b.k-air { --kf: linear-gradient(180deg, #fff 0%, #f2fbff 38%, #bfeaff 40%, #58b8ff 100%); --ko: #0c1f5c; --kc: #7fe3ff; --ks: #d8f4ff; }
+.mv-b.k-dash { --kf: linear-gradient(180deg, #fff 0%, #effffb 38%, #a8fff0 40%, #22d6b4 100%); --ko: #04363a; --kc: #6fe0d0; --ks: #d4fff6; font-size: 32px; }
+.mv-b.k-close { --kf: linear-gradient(180deg, #fff 0%, #fff2fa 38%, #ffc2e6 40%, #ff5ab4 100%); --ko: #4a0a3a; --kc: #ff8ad0; --ks: #ffe0f2; font-size: 30px; }
+.mv-b.k-skim { --kf: linear-gradient(180deg, #fff 0%, #f0fdff 38%, #c4f6ff 40%, #5ad8f0 100%); --ko: #0b3550; --kc: #9ff2ff; --ks: #dcfaff; font-size: 24px; }
+.mv-b.k-sky { --kf: linear-gradient(180deg, #fff 0%, #fffbe8 34%, #fff0a0 36%, #ffc53a 62%, #ff7418 100%); --ko: #6a2a00; --kc: #ffcf40; --ks: #fff0c0; font-size: 38px; }
+.mv-b.k-inferno { --kf: linear-gradient(180deg, #fff 0%, #fffdf0 36%, #fff3b0 38%, #ffcf40 64%, #ff3a1a 100%); --ko: #5a0010; --kc: #ffcf40; --ks: #fff0c0; font-size: 42px; }
+/* levels and elements: R's call-out in the element's colours (moves.js INFERNO_CALLS) */
+.mv-b.k-inferno.el-azure { --kf: linear-gradient(180deg, #fff 0%, #f2f9ff 36%, #c4e8ff 38%, #5aaeff 64%, #1f58e0 100%); --ko: #07174e; --kc: #6cb8ff; --ks: #d8eeff; }
+.mv-b.k-inferno.el-radiant { --kf: linear-gradient(180deg, #fff 0%, #fffef6 36%, #fff6cc 38%, #ffdc66 64%, #f2a21a 100%); --ko: #4a2600; --kc: #ffe07a; --ks: #fff6d8; }
+.mv-b.k-inferno.el-lightning { --kf: linear-gradient(180deg, #fff 0%, #f4feff 36%, #cdf7ff 38%, #62e2ff 62%, #2a74ff 100%); --ko: #061646; --kc: #7fe9ff; --ks: #e0fbff; }
+.mv-b.k-inferno.el-storm { --kf: linear-gradient(180deg, #fff 0%, #fffbe8 36%, #ffe89a 38%, #ffcc3a 58%, #48b0ff 100%); --ko: #0b1848; --kc: #ffd24a; --ks: #e6fbff; }
+.mv-b.k-deny { --kf: linear-gradient(180deg, #fff 0%, #fff0f2 38%, #ffb0bb 40%, #ff4d6d 100%); --ko: #3a0612; --kc: #ff4d6d; --ks: #ffd0d8; font-size: 22px; }
+
+/* ---------------------------------------------------------------- stamina chunk on the player panel's stamina bar */
+.mv-stc { position: absolute; left: 0; top: 0; width: 0; height: 5px; opacity: 0; will-change: transform; }
+.mv-stc.on { opacity: 1; }
+.mv-stc i { position: absolute; inset: -2px 0; background: #ffffff; box-shadow: 0 0 8px rgba(160, 240, 255, .9); opacity: 0; }
+.mv-stc.deny i { background: #ff4d6d; box-shadow: 0 0 8px rgba(255, 60, 90, .9); }
+
+/* ---------------------------------------------------------------- soft target (aim assist): gold corner brackets */
+/* .mv-aim is a zero-size anchor at the target's screen point; --hs = half-size of the frame (px, from its distance) */
+.mv-aim { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity .12s ease; will-change: transform; --hs: 36px; --bc: #ffd46a; --bk: rgba(40, 18, 0, .7); }
+.mv-aim.on { opacity: 1; }
+.mv-aim .ma-in { position: absolute; left: calc(-1 * var(--hs)); top: calc(-1 * var(--hs)); width: calc(2 * var(--hs)); height: calc(2 * var(--hs));
+  transition: transform .14s ease-out; }
+.mv-aim .ma-c { position: absolute; width: 13px; height: 13px; border: 0 solid var(--bc);
+  filter: drop-shadow(0 0 1.5px var(--bk)) drop-shadow(0 1px 0 var(--bk)); transition: border-color .12s, width .14s, height .14s; }
+.mv-aim .ma-c.tl { left: 0; top: 0; border-left-width: 3px; border-top-width: 3px; }
+.mv-aim .ma-c.tr { right: 0; top: 0; border-right-width: 3px; border-top-width: 3px; }
+.mv-aim .ma-c.bl { left: 0; bottom: 0; border-left-width: 3px; border-bottom-width: 3px; }
+.mv-aim .ma-c.br { right: 0; bottom: 0; border-right-width: 3px; border-bottom-width: 3px; }
+.mv-aim .ma-dot { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; transform: rotate(45deg); background: var(--bc);
+  box-shadow: 0 0 0 1.5px var(--bk); opacity: .0; transition: opacity .12s; }
+/* in range: the breath reaches — warm white-orange, the frame tightens, the centre diamond lights */
+.mv-aim.range { --bc: #fff2c4; --bk: rgba(120, 30, 0, .85); }
+.mv-aim.range .ma-in { transform: scale(.86); }
+.mv-aim.range .ma-c { width: 16px; height: 16px; border-color: #fff2c4; }
+.mv-aim.range .ma-dot { opacity: 1; background: #ff9a3a; animation: marange .5s ease-in-out infinite alternate; }
+@keyframes marange { from { transform: rotate(45deg) scale(.8); } to { transform: rotate(45deg) scale(1.25); } }
+/* the titan: the part aimed at, slimmer corners */
+.mv-aim.titan .ma-c { width: 10px; height: 10px; }
+
+/* ---------------------------------------------------------------- flight mode pill (under the speed readout) */
+.mv-mode { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity .3s ease; will-change: transform; }
+.mv-mode.on { opacity: .92; }
+.mv-mode .md-in { position: absolute; right: 0; top: 0; display: flex; align-items: center; gap: 7px; white-space: nowrap;
+  font: 700 10.5px/1 var(--f-ui, sans-serif); letter-spacing: .3em; text-shadow: 0 1px 2px rgba(6, 12, 34, .9), 0 0 8px rgba(6, 12, 34, .6); }
+.mv-mode.la .md-in { right: auto; left: 0; }
+.mv-mode .md-t { padding-left: .3em; color: #cdf3ff; }
+.mv-mode .md-ic { width: 14px; height: 9px; background: #9fe8ff;
+  /* hover: a wing stroke (a shallow V, the downbeat) */
+  clip-path: polygon(0 0, 50% 58%, 100% 0, 100% 42%, 50% 100%, 0 42%); }
+.mv-mode .md-bar { position: relative; width: 38px; height: 3px; transform: skewX(-24deg); background: rgba(8, 12, 36, .6); border: 1px solid rgba(255, 255, 255, .35); overflow: hidden; }
+.mv-mode .md-bar i { position: absolute; inset: 0; transform-origin: left; transform: scaleX(0); background: linear-gradient(90deg, #bff4ff, #ffd46a); transition: transform .12s linear; }
+.mv-mode .md-hint { display: none; align-items: center; gap: 4px; letter-spacing: .16em; color: var(--ink-dim, rgba(255, 250, 240, .72)); font-weight: 600; }
+.mv-mode .md-hint.on { display: inline-flex; }
+.mv-mode .md-hint kbd { min-width: 18px; padding: 2px 4px 1px; border-radius: 3px; border: 1px solid rgba(255, 238, 200, .55); background: rgba(6, 12, 34, .7);
+  font: 700 10px/1.2 var(--f-ui, sans-serif); letter-spacing: 0; color: #fffaf0; text-align: center; }
+.mv-mode.flight .md-t { color: var(--gold-hi, #ffe7a3); }
+.mv-mode.flight .md-ic { background: var(--gold-hi, #ffe7a3); width: 10px; clip-path: polygon(0 0, 55% 50%, 0 100%, 40% 100%, 100% 50%, 40% 0); }
+.mv-mode.tr .md-t, .mv-mode.tr .md-ic { animation: mdtr .36s ease-in-out infinite alternate; }
+@keyframes mdtr { from { opacity: .45; } to { opacity: 1; } }
+
+/* ---------------------------------------------------------------- phones */
+@media (max-width: 600px) {
+  .mv-mode .md-in { font-size: 9.5px; letter-spacing: .22em; }
+  .mv-mode .md-bar { width: 28px; }
+  .mv-ret { width: 112px; height: 112px; margin: -56px 0 0 -56px; }
+  .mv-rl { font-size: 10px; }
+  .mv-rl.sky { top: 76px; } .mv-rl.max { top: 26px; }
+  .mv-b { font-size: 26px; }
+  .mv-b.k-sky { font-size: 30px; } .mv-b.k-inferno { font-size: 32px; } .mv-b.k-skim, .mv-b.k-deny { font-size: 20px; }
+  .mv-b .mb-s { font-size: 10px; letter-spacing: .14em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mv-sp.full .sp-aura, .mv-sp.burn .sp-aura, .mv-sp.burn .sp-cap, .mv-ret.c-max .cg-ring, .mv-fring.max i, .mv-aim.range .ma-dot, .mv-mode.tr .md-t, .mv-mode.tr .md-ic { animation: none; }
+}
+/* the aim tip's glyph: four gold corners (tips.js ['bracket'] part) */
+.tips .tp-brk { display: inline-block; width: 13px; height: 13px; margin-right: 4px; vertical-align: -2px;
+  background:
+    linear-gradient(#ffd46a, #ffd46a) 0 0 / 5px 2px, linear-gradient(#ffd46a, #ffd46a) 0 0 / 2px 5px,
+    linear-gradient(#ffd46a, #ffd46a) 100% 0 / 5px 2px, linear-gradient(#ffd46a, #ffd46a) 100% 0 / 2px 5px,
+    linear-gradient(#ffd46a, #ffd46a) 0 100% / 5px 2px, linear-gradient(#ffd46a, #ffd46a) 0 100% / 2px 5px,
+    linear-gradient(#ffd46a, #ffd46a) 100% 100% / 5px 2px, linear-gradient(#ffd46a, #ffd46a) 100% 100% / 2px 5px;
+  background-repeat: no-repeat; }
+
+/* a small flame glyph for the INFERNO tip (tips.js ['flame'] part) */
+.tips .tp-flame { display: inline-block; width: 11px; height: 14px; margin-right: 3px; vertical-align: -2px;
+  background: linear-gradient(180deg, #fff4c8, #ffcf40 45%, #ff5a1a); clip-path: polygon(50% 0, 80% 34%, 100% 62%, 86% 92%, 50% 100%, 14% 92%, 0 62%, 22% 40%, 36% 58%); }
+
+/* a small bolt glyph for the STORM SURGE tip (tips.js ['bolt'] part, the lightning / storm tiers) */
+.tips .tp-bolt { display: inline-block; width: 10px; height: 14px; margin-right: 3px; vertical-align: -2px;
+  background: linear-gradient(180deg, #ffffff, #9ff0ff 45%, #3a8cff); clip-path: polygon(62% 0, 12% 58%, 44% 58%, 30% 100%, 88% 38%, 56% 38%, 74% 0); }
+
+/* controls panel (screens.js): '+' / '›' between key caps of a combo */
+.ctl .ksep { display: inline-block; margin: 0 1px; font: 700 12px/1 var(--f-ui, sans-serif); color: var(--gold-hi, #ffe7a3); }
+
+/* Russian (languages, 29.09; :root[lang="ru"] only): the call-outs in the face with Cyrillic (styles.css --f-manga) */
+:root[lang="ru"] .mv-b .mb-t { font-family: var(--f-manga, Impact, "Arial Black", sans-serif); }

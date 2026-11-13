@@ -1,0 +1,24 @@
+/* Watermark (the user's brand, 29.09): the Higgsfield · Claude logo, always on in the top-right corner, above every screen
+   (boot, title, HUD, pause, results, photo mode, cinematics), never takes a tap or a click. Its size follows the viewport so it
+   keeps the same proportion from a phone to a 4K TV. --wm-reserve is the height the top-right HUD items keep free under it. */
+:root {
+  --wm-w: clamp(150px, 13vw, 560px);
+  --wm-gap: clamp(8px, 1.1vmin, 28px);
+  --wm-h: calc(var(--wm-w) * 0.339);            /* the logo is 2000 × 678 */
+  --wm-reserve: calc(var(--wm-h) + var(--wm-gap));
+}
+#watermark {
+  position: fixed; z-index: 2147483000;
+  /* --safe-x / --safe-y: Settings > Screen margin (a TV that overscans HDMI; touch.js sets them on the root) */
+  top: calc(var(--wm-gap) + max(env(safe-area-inset-top, 0px), var(--safe-y, 0px)));
+  right: calc(var(--wm-gap) + max(env(safe-area-inset-right, 0px), var(--safe-x, 0px)));
+  width: var(--wm-w); height: auto;
+  pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; touch-action: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+}
+
+/* The HUD items that sit in the top-right corner start under the logo (a margin adds to an absolute box's top; a box with
+   top: auto — the desktop sound icon, a phone's bottom-left tally — is not moved). Touch mode zooms its boxes by --z
+   (styles.css), which scales the margin too, so there it is divided back. */
+.tally, .toasts, .t-fs, .mute-ic, .fr.spd, .hud.min .pl, .hud.touch .pl { margin-top: var(--wm-reserve); }
+.tm .tally, .tm .toasts, .tm .t-fs, .tm .mute-ic, .tm .hud.min .pl, .tm .hud.touch .pl { margin-top: calc(var(--wm-reserve) / var(--z, 1)); }

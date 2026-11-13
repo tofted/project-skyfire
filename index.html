@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Skyfire — Riders of the Cloud Sea</title>
+<link rel="icon" href="data:,">
+<meta name="description" content="Skyfire — ride a dragon over the cloud sea. Eight stages, endless survival, online leaderboards.">
+<meta name="theme-color" content="#0d1f3f">
+<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./online.css">
+<!-- controls follow the device (touch on phones and tablets, keyboard and mouse elsewhere); add ?touch=1 to force touch -->
+<script>globalThis.SKYFIRE_PARAMS = "langs=en";</script>
+<!-- online accounts + leaderboards: fill in firebase-config.js (README.md) -->
+<script src="./firebase-config.js"></script>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="view" tabindex="0" aria-label="Game view"></canvas>
+  <div id="ui" aria-live="polite"></div>
+  <div id="boot" class="boot">
+    <div class="boot-title">SKYFIRE</div>
+    <div class="boot-sub" style="visibility:hidden">Riders of the Cloud Sea</div>
+    <div class="boot-bar"><i id="boot-fill"></i></div>
+    <div class="boot-note" id="boot-note" style="visibility:hidden">Loading…</div>
+  </div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
