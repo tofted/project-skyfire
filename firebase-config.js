@@ -10,12 +10,12 @@
 // firestore.rules (publish it in the console) and the "Authorized domains" list under Authentication → Settings.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 globalThis.SKYFIRE_FIREBASE = {
-  apiKey: "",
-  authDomain: "",          // e.g. "skyfire-12345.firebaseapp.com"
-  projectId: "",           // e.g. "skyfire-12345"
-  appId: "",               // e.g. "1:1234567890:web:abcdef123456"
+  apiKey: "AIzaSyCDNAKtu8GkYWrES20J6b8AudWRGpWHyzA",
+  authDomain: "project-skyfire-91827.firebaseapp.com",          // e.g. "skyfire-12345.firebaseapp.com"
+  projectId: "project-skyfire-91827",           // e.g. "skyfire-12345"
+  appId: "1:456964223396:web:1b40b3c11c81f90f981131",               // e.g. "1:1234567890:web:abcdef123456"
 
   // Set to true after you switch on the Google provider (Authentication → Sign-in method → Google):
   // the sign-in panel then shows a "Continue with Google" button.
-  google: false,
+  google: true,
 };
