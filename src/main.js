@@ -97,6 +97,8 @@ async function boot() {
     bootNote.textContent = bootStep(name);
   });
   if (sandboxModule?.setup) await sandboxModule.setup(game);
+  // performance update: build the scene's shader programs now, behind the title, not in the middle of a fight
+  try { game.pipeline?.warmup?.(); } catch (e) { console.warn('[boot] warm-up', e); }
 
   document.getElementById('boot').classList.add('hidden');
   game.setState(sandbox ? 'play' : 'title');

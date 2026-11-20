@@ -579,7 +579,7 @@ export function buildPause(api) {
 }
 
 // ---------------------------------------------------------------------------------------------------- settings
-const QUALITIES = [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']];
+const QUALITIES = [['auto', 'Auto'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']];
 const CONFIRM_MS = 3000;          // a pick that asks for a second tap waits this long for it
 
 /**
@@ -710,7 +710,11 @@ export function buildSettings(api) {
   // a player who cannot read the language shown finds it at once (review round 1: at the column's end it was two screens
   // down on a landscape phone and under the fold of a 1280×800 laptop)
   if (LANG_CHOICE) segmented('language', 'Language', Object.entries(LANGS), { id: 'language', own: true, get: () => lang(), put: (l) => chooseLang(api, l) });
-  segmented('quality', 'Graphics quality', QUALITIES);
+  // performance update: Auto holds 60 fps by itself (core/perf.js); the value shows what it is running at now
+  segmented('quality', 'Graphics quality', QUALITIES, { id: 'quality', value: () => {
+    const p = typeof api.perf === 'function' ? api.perf() : null;
+    return p && p.fps > 1 ? `${Math.round(p.fps)} fps` : '';
+  } });
   segmented('hud', 'HUD', [['auto', 'Auto'], ['minimal', 'Minimal'], ['full', 'Full']], { value: () => (S.hud === 'auto' ? tr(mode().minimal ? 'Minimal' : 'Full') : '') });
   // HUD size (touch mode: hud.js scales the touch UI ×1.3 for a TV read from the sofa)
   segmented('hudSize', 'HUD size', [['normal', 'Normal'], ['large', 'Large (TV)']], { id: 'hudSize' });
@@ -719,6 +723,7 @@ export function buildSettings(api) {
   const syncs = [
     toggle(() => (mode().minimal ? 'minimalNumbers' : 'damageNumbers'), dnLabel, { id: 'numbers' }),
     toggle('fullscreen', 'Fullscreen', { id: 'fs', get: () => !!api.fs?.on, set: (on) => { if (!!api.fs?.on !== on) api.fs?.toggle(); } }),
+    toggle('showFps', 'Show frame rate', { id: 'fps' }),
     slider('master', 'Master volume', 0, 1, 0.05, pct),
     slider('music', 'Music', 0, 1, 0.05, pct),
     slider('sfx', 'Sound effects', 0, 1, 0.05, pct),
@@ -731,6 +736,10 @@ export function buildSettings(api) {
   segmented('controls', 'Controls', [['auto', 'Auto'], ['touch', 'Touch'], ['desktop', 'Keyboard & mouse']], {
     value: () => (S.controls === 'auto' ? tr(mode().touch ? 'Touch' : 'Mouse') : ''),
     confirm: (k, e) => (k === 'desktop' && mode().touch && fromTouch(e) ? tr('Touch controls turn off · tap again') : ''),
+  });
+  // controls update: Auto = Strong with touch controls, Normal with a mouse (src/actors/assist.js)
+  segmented('aimAssist', 'Aim assist', [['auto', 'Auto'], ['normal', 'Normal'], ['strong', 'Strong']], {
+    id: 'assist', value: () => (S.aimAssist === 'auto' ? tr(mode().touch ? 'Strong' : 'Normal') : ''),
   });
   syncs.push(
     slider('touchSensitivity', 'Touch aim sensitivity', 0.25, 3, 0.05, x2, 'touchSens'),

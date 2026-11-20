@@ -72,6 +72,13 @@ export const TOUCH = {
   aim: {
     perHeight: 400,                  // deg the view turns for a drag across the full screen height (touchSensitivity 1)
     slop: 2.2,                       // vmin a finger on FIRE / FIREBALL travels before its drag also aims
+    // controls update ("very hard to aim whilst flying"): the drag's gain follows the thumb's speed — a slow drag
+    // (≤ v[0] screen heights / s) turns the view lo × perHeight, a flick (≥ v[1]) hi × perHeight, smoothly between:
+    // fine aim on a target and fast turns from the same thumb. on: false = the old straight 1 : 1 drag.
+    curve: { on: true, lo: 0.5, hi: 1.3, v: [0.12, 1.4] },
+    // … and the drag reaches the camera through a short low-pass (time constant, s; 0 = off): touch events do not
+    // arrive in step with the frames (none in one frame, two in the next), which made the view judder at 60 fps
+    smooth: 0.022,
   },
   gesture: { orbit: 1.6, pinch: 2.0, dominance: 0.6 },   // vmin of centroid travel / of spread before either engages
   // the look pitch (deg) that adds Space / Ctrl to a stick pushed within `cone` deg of straight up: on at [0], off at
@@ -256,19 +263,53 @@ export default function createTouchUI(game) {
   /** look = false: a two-finger orbit (Mouse2 held: the camera's free look moves, not the look / aim). */
   function addAim(dx, dy, look = true) {
     if (!input?.mouse || !(dx || dy)) return;
-    const g = aimGain();
-    input.mouse.dx += dx * g; input.mouse.dy += dy * g;
-    aimStats.px += Math.hypot(dx, dy);
-    // how far this drag moves the look DOWN (deg; the camera: aimPitch −= mouse dy · sens · invert-Y, so it is the drag's
-    // share of the screen height × perHeight × touchSensitivity): the flight dive's own-look test (vertical.own)
-    if (look && dy) {
-      const inv = game.cameraRig?.settings?.invertY ? -1 : 1;
-      const ts = clamp(num(setting('touchSensitivity', 1), 1), TOUCH.sens[0], TOUCH.sens[1]);
-      const down = dy * inv / Math.max(200, layout.h || innerHeight || 1080) * TOUCH.aim.perHeight * ts;
-      if (down > 0) PK.ownPend += down;
+    // (controls update) the response curve: the gain follows the thumb's speed (smoothed over the last events)
+    let k = 1;
+    const C = TOUCH.aim.curve;
+    if (C && C.on !== false) {
+      const H = Math.max(200, layout.h || innerHeight || 1080);
+      const t = nowMs(), dtE = clamp((t - aimPend.t) / 1000, 1 / 240, 0.05);
+      aimPend.t = t;
+      const v = Math.hypot(dx, dy) / H / dtE;                              // screen heights per second
+      aimPend.v += (v - aimPend.v) * 0.5;
+      const u = clamp((aimPend.v - C.v[0]) / Math.max(1e-3, C.v[1] - C.v[0]), 0, 1);
+      k = C.lo + (C.hi - C.lo) * u * u * (3 - 2 * u);
     }
+    aimStats.k = k;
+    const g = aimGain() * k;
+    aimStats.px += Math.hypot(dx, dy);
+    if (hooked && TOUCH.aim.smooth > 0) {
+      // … and it reaches the camera through flushAim(), a little of it every frame
+      aimPend.x += dx * g; aimPend.y += dy * g;
+      if (look) aimPend.ly += dy * g;
+      return;
+    }
+    input.mouse.dx += dx * g; input.mouse.dy += dy * g;
+    if (look) ownLook(dy * g);
   }
-  const aimStats = { px: 0 };
+  /** How far a look drag (mouse px, as the camera gets it) moves the look DOWN (deg; the camera: aimPitch −= mouse dy ·
+   *  sens · sensitivity · invert-Y): the flight dive's own-look test (vertical.own). */
+  function ownLook(dyMouse) {
+    if (!dyMouse) return;
+    const rig = game.cameraRig;
+    const sens = num(rig?.tuning?.sens, 0.0021);
+    const camSens = clamp(num(rig?.settings?.sensitivity, num(setting('mouseSensitivity', 1), 1)), 0.1, 5);
+    const down = dyMouse * sens * camSens * (180 / Math.PI) * (rig?.settings?.invertY ? -1 : 1);
+    if (down > 0) PK.ownPend += down;
+  }
+  /** (controls update) Once per frame, first thing: the share of the pending drag that reaches the camera now. */
+  function flushAim(dt) {
+    if (!input?.mouse || !(aimPend.x || aimPend.y)) return;
+    const tau = TOUCH.aim.smooth;
+    let a = tau > 0 ? 1 - Math.exp(-clamp(dt, 1 / 240, 0.1) / tau) : 1;
+    if (Math.abs(aimPend.x) + Math.abs(aimPend.y) < 0.4) a = 1;            // the tail: all of it, the view comes to rest
+    const ox = aimPend.x * a, oy = aimPend.y * a, ol = aimPend.ly * a;
+    aimPend.x -= ox; aimPend.y -= oy; aimPend.ly -= ol;
+    input.mouse.dx += ox; input.mouse.dy += oy;
+    ownLook(ol);
+  }
+  const aimPend = { x: 0, y: 0, ly: 0, v: 0, t: 0 };
+  const aimStats = { px: 0, k: 1 };
   function addWheel(v) { if (input && Number.isFinite(v)) { input.wheel += v; aimStats.wheel = (aimStats.wheel || 0) + v; } }
 
   // ---------------------------------------------------------------------------------------------- fingers
@@ -603,6 +644,7 @@ export default function createTouchUI(game) {
       const dt = PK.lastNow < 0 ? 1 / 60 : now - PK.lastNow;
       PK.lastNow = now;
       if (dt > 0 && dt < 0.2) PK.dtAvg += (dt - PK.dtAvg) * 0.1;
+      flushAim(dt > 0 ? dt : 1 / 60);        // (controls update) before lookTrack: this frame's drag is this frame's own look
     }
     refreshShown();
     // a synthetic sequence's next frame; a move's keys that have been held long enough
@@ -739,6 +781,7 @@ export default function createTouchUI(game) {
     if (stick.active) stickEnd();
     releaseStick();
     PK.pending.length = 0; PK.timed.length = 0; PK.deferring.clear();
+    aimPend.x = aimPend.y = aimPend.ly = 0; aimPend.v = 0;      // (controls update) no drag left over for the next view
     for (const [code, set] of [...owners]) for (const who of [...set]) unhold(code, who);
     for (const B of Object.values(btn)) { B.fingers.clear(); B.setDown(false); }
     if (n || reason === 'touchcancel') { stats.released += n; logEv({ ev: 'releaseAll', reason, n }); }

@@ -1080,7 +1080,7 @@ export default function createDirector(game) {
     applySurvivalKnobs(w) {
       const E = enemies();
       if (!E || !w) return;
-      const qCap = SURVIVAL.capByQuality[game.quality?.name] ?? SURVIVAL.capMax;
+      const qCap = SURVIVAL.capByQuality[game.quality?.tier || game.quality?.name] ?? SURVIVAL.capMax;
       const cap = Math.max(8, Math.min(w.cap, qCap));
       if (d.survival) d.survival.cap = cap;
       E.maxLive = cap; E.maxLiveRiders = Math.min(w.riderCap, Math.max(2, cap - 4)); E.maxTokens = w.tokens; E.flockTokens = w.flockTokens;

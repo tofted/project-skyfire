@@ -176,6 +176,19 @@ export const PRESETS = {
       flare: 0.75, shadowTint: 0x1e2c56, shadowAmt: 0.1, highlightTint: 0xffeed8, raysColor: 0xffc070,
       vignetteTint: [0.74, 0.77, 0.86] },
   },
+  // boss update — the titan enraged: the storm turns crimson-violet (bossfx.js blends to it on the enrage)
+  tempest: {
+    sunDir: dirFrom(17, AZIMUTH + 18), sunColor: [0xff7a4a, 3.7],
+    zenith: 0x2a1230, horizon: 0x9a5c64, haze: 0x7c4a5c, hazeSun: 0xff6a3c,
+    density: 0.0002, falloff: 1 / 2400, farTint: 0x8e6478, farDist: 5000,
+    sunLight: [0xff9a6c, 2.55], shade: 0x8c6c9c, rim: 0xff6a40, skyUp: 0x261028, bounce: 0x44201c,
+    hemiSky: [0x7c5a84, 0.95], hemiGround: 0x4a2a28,
+    cloudLit: 0xffb49a, cloudShade: 0x6c4a70, cloudDeep: 0x42284e,
+    mist: { density: 0.0013, above: 85, below: 60, noise: 0.6, color: 0x8c5a6c },
+    grade: { exposure: 0.97, saturation: 1.12, contrast: 1.18, warmth: 0.14, bloom: 1.1, godrays: 1.3, vignette: 0.5,
+      flare: 0.85, shadowTint: 0x3a1242, shadowAmt: 0.12, highlightTint: 0xffe2d4, raysColor: 0xff8a5a,
+      vignetteTint: [0.86, 0.68, 0.76] },
+  },
   victory: {
     // Wave 2: golden hour with a bluer upper sky and blue (not violet) cloud shadows; peach-gold horizon kept.
     sunDir: dirFrom(9, AZIMUTH + 8), sunColor: [0xffc88a, 3.2],

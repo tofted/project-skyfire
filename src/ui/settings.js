@@ -1,8 +1,10 @@
 // Player settings: one small JSON in localStorage (every access wrapped, private windows may throw).
-// Quality is also mirrored to 'skyfire.quality', the key core/quality.js reads at boot.
+// The graphics mode ('auto' | low | medium | high | ultra) is saved by game.setQuality() under 'skyfire.gfx', the key
+// core/quality.js reads at boot (performance update: the older 'skyfire.quality' is no longer read — every device
+// starts in the automatic mode once).
 // Consumers: game.settings (same object as game.hud.settings), and the 'settings' event { settings, key }.
 export const DEFAULTS = {
-  quality: 'high',          // low | medium | high | ultra  -> game.setQuality()
+  quality: 'auto',          // auto | low | medium | high | ultra  -> game.setQuality()
   mouseSensitivity: 1,      // multiplier, 0.25..3 (camera/aim owner reads it)
   invertY: false,
   master: 0.85,             // 0..1
@@ -27,17 +29,23 @@ export const DEFAULTS = {
   screenMargin: 0,
   // HUD size (fix round 1, the 86" TV review): 'large' scales the touch UI ×1.3 (hud.js HUD_LARGE; touch mode only)
   hudSize: 'normal',
+  // controls update: how much help the aim gets — auto (strong with touch controls, normal with a mouse) | normal |
+  // strong (src/actors/assist.js)
+  aimAssist: 'auto',
+  // performance update: a small frames-per-second read-out in the corner (src/ui/fps.js)
+  showFps: false,
 };
 
 /** The allowed values of the string settings (anything else in a save falls back to the default). */
 export const CHOICES = {
-  quality: ['low', 'medium', 'high', 'ultra'],
+  quality: ['auto', 'low', 'medium', 'high', 'ultra'],
   language: ['auto', 'en', 'ru'],          // (29.09) the title's "English | (other language)" and the Settings row save en / ru
   controls: ['auto', 'touch', 'desktop'],
   hud: ['auto', 'minimal', 'full'],
   touchButtonSize: ['xs', 's', 'm', 'l'],
   touchLayout: ['corners', 'compact'],
   hudSize: ['normal', 'large'],
+  aimAssist: ['auto', 'normal', 'strong'],
 };
 
 const KEY = 'skyfire.settings';
@@ -68,7 +76,6 @@ export function minimalHud(s, touch) {
 export function saveSettings(s) {
   try {
     localStorage.setItem(KEY, JSON.stringify(s));
-    localStorage.setItem('skyfire.quality', s.quality);
   } catch { /* ignore */ }
 }
 

@@ -216,6 +216,11 @@ uniform int uDebug;
 // the colour fringes split and the picture saturates for a few frames.
 uniform vec4 uRipple[2];
 uniform float uKick;
+// boss update — the titan fight (vfx/bossfx.js → pipeline.setBoss, every frame it runs): xy the core on screen (uv),
+// z its energy (heat haze round it and light rays pouring out of it, through the bloom), w the enrage (a crimson grade
+// and a heartbeat at the edges); uFlash a lightning flash over the whole sky.
+uniform vec4 uBoss;
+uniform float uFlash;
 varying vec2 vUv;
 
 float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
@@ -319,8 +324,14 @@ void main() {
       wave += band * st;
     }
   }
+  if (uBoss.z > 0.001) {
+    // heat shimmer round the core
+    vec2 hd = (uv - uBoss.xy) * vec2(uAspect, 1.0);
+    float h = exp(-dot(hd, hd) * 14.0) * min(uBoss.z, 1.5);
+    uv += vec2(sin(uv.y * 95.0 + uTime * 9.0), cos(uv.x * 83.0 - uTime * 7.3)) * 0.0024 * h;
+  }
   vec2 dc = uv - 0.5;
-  float ca = uCA + uKick * 0.012;
+  float ca = uCA + uKick * 0.012 + uBoss.w * 0.0035;
   vec3 col;
   if (uSpeed > 0.001) {
     // Radial speed blur, masked out of the centre so the dragon stays crisp.
@@ -329,8 +340,8 @@ void main() {
     vec2 st = dir * uSpeed * 0.045 * m;
     float j = ign(gl_FragCoord.xy);
     col = vec3(0.0);
-    for (int i = 0; i < 8; i++) col += texture2D(tHDR, uv - st * ((float(i) + j) / 8.0)).rgb;
-    col /= 8.0;
+    for (int i = 0; i < SPEED_TAPS; i++) col += texture2D(tHDR, uv - st * ((float(i) + j) / float(SPEED_TAPS))).rgb;
+    col /= float(SPEED_TAPS);
   } else if (ca > 0.0) {
     vec2 o = dc * ca * smoothstep(0.12 - 0.1 * uKick, 0.5, dot(dc, dc));
     col = vec3(texture2D(tHDR, uv - o).r, texture2D(tHDR, uv).g, texture2D(tHDR, uv + o).b);
@@ -339,6 +350,19 @@ void main() {
   }
   col += texture2D(tBloom, uv).rgb * uBloom * (1.0 + uKick * 1.1);
   col *= 1.0 + wave * 0.22;                                  // the shock front catches the light
+  if (uBoss.z > 0.001) {
+    // light pouring out of the core: the bloom smeared along the lines to it (6 taps of the small bloom texture)
+    vec2 to = uBoss.xy - uv;
+    float jj = ign(gl_FragCoord.xy + 17.0);
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 6; i++) {
+      float t = (float(i) + jj) / 6.0;
+      acc += texture2D(tBloom, uv + to * t * 0.7).rgb * (1.0 - t * 0.6);
+    }
+    float fall = 1.0 / (1.0 + dot(to * vec2(uAspect, 1.0), to * vec2(uAspect, 1.0)) * 6.0);
+    col += acc * (uBoss.z * 0.55 * fall) * uBloom * 4.0;
+  }
+  if (uFlash > 0.001) col = col * (1.0 + uFlash * 0.6) + vec3(0.55, 0.62, 1.0) * uFlash * 0.18;
 
   if (uRaysK > 0.0) {
     vec2 sv = uv - uSun; sv.x *= uAspect;
@@ -381,6 +405,12 @@ void main() {
   vec2 vd = dc * vec2(uAspect, 1.0) / sqrt(uAspect * uAspect * 0.25 + 0.25);
   float v = smoothstep(0.45, 1.25, length(vd));
   col *= mix(vec3(1.0), uVignetteTint, v * uVignette * 1.6);
+  if (uBoss.w > 0.001) {
+    // the enraged titan: a crimson lean and a heartbeat glowing at the edges of the view
+    float beat = pow(0.5 + 0.5 * sin(uTime * 7.4), 6.0) + 0.6 * pow(0.5 + 0.5 * sin(uTime * 7.4 - 1.1), 10.0);
+    col = mix(col, col * vec3(1.07, 0.86, 0.9), uBoss.w * 0.5);
+    col += vec3(0.42, 0.02, 0.07) * smoothstep(0.35, 1.25, length(vd)) * uBoss.w * (0.25 + 0.35 * beat);
+  }
   col += (ign(gl_FragCoord.xy + fract(uTime) * 64.0) - 0.5) * (1.0 / 255.0 + uGrain);
 
   if (uDebug == 1) col = toSRGB(texture2D(tBloom, uv).rgb);
@@ -423,7 +453,8 @@ export default function createPipeline(game) {
   };
   const state = { speedBlur: 0, speedCenter: new THREE.Vector2(0.5, 0.5),
     // effects update: two shockwave slots { x, y, t, life, speed, strength } and the kick (decays in real time)
-    ripples: [{ x: 0.5, y: 0.5, t: 9, life: 1, speed: 1, strength: 0 }, { x: 0.5, y: 0.5, t: 9, life: 1, speed: 1, strength: 0 }], kick: 0 };
+    ripples: [{ x: 0.5, y: 0.5, t: 9, life: 1, speed: 1, strength: 0 }, { x: 0.5, y: 0.5, t: 9, life: 1, speed: 1, strength: 0 }], kick: 0,
+    boss: { x: 0.5, y: 0.5, energy: 0, enrage: 0, flash: 0, onScreen: false, fresh: false } };
   const reducedMotion = (() => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } })();
   // Review A/B keys (?debug only; real keyboard, nothing else changes): Digit8 = wave-4 toon form shading on/off,
   // Digit9 = valley mist on/off, Digit7 = raw cloud buffer view on/off. They work in photo mode, so before/after is
@@ -475,7 +506,9 @@ export default function createPipeline(game) {
     const rs = clamp(game.quality?.renderScale ?? 1, 0.25, 2);
     const w = Math.max(1, Math.round(s.pw * rs)), h = Math.max(1, Math.round(s.ph * rs));
     let n = settings.msaa;
-    if (n === null || !Number.isFinite(n)) n = game.quality?.name === 'low' ? 2 : ((s.dpr || 1) * rs >= 1.75 ? 2 : 4);
+    // (performance update: a quality may name its own sample count — the automatic mode's cheapest rungs use 0 / 2)
+    const qm = game.quality?.msaa;
+    if (n === null || !Number.isFinite(n)) n = Number.isFinite(qm) && qm !== null ? qm : (game.quality?.tier || game.quality?.name) === 'low' ? 2 : ((s.dpr || 1) * rs >= 1.75 ? 2 : 4);
     n = Math.min(n, renderer.capabilities.maxSamples || 4);
     return { w, h, n };
   }
@@ -548,6 +581,7 @@ export default function createPipeline(game) {
     uAspect: { value: 1.6 }, uExposure: { value: 1 }, uBloom: { value: 0.7 }, uRaysK: { value: 0 }, uFlare: { value: 0 },
     uSunVisK: { value: 0 }, uCA: { value: settings.chromatic }, uSpeed: { value: 0 }, uTime: { value: 0 },
     uRipple: { value: [new THREE.Vector4(0.5, 0.5, 0, 0), new THREE.Vector4(0.5, 0.5, 0, 0)] }, uKick: { value: 0 },
+    uBoss: { value: new THREE.Vector4(0.5, 0.5, 0, 0) }, uFlash: { value: 0 },
     uSat: { value: 1.1 }, uContrast: { value: 1.04 }, uWarmth: { value: 0 }, uVignette: { value: 0.3 }, uShadowAmt: { value: 0.07 },
     uGrain: { value: settings.grain }, uRaysColor: { value: new THREE.Color(1, 0.95, 0.85) },
     uShadowTint: { value: new THREE.Color(0x2c327e) }, uHighlightTint: { value: new THREE.Color(0xfff2de) },
@@ -557,8 +591,10 @@ export default function createPipeline(game) {
   const finalVariants = new Map();
   function finalMat() {
     const tm = TONEMAPS[settings.toneMapper] ?? 0;
-    let m = finalVariants.get(tm);
-    if (!m) { m = mat(FINAL_FRAG, finalUniforms, { TONEMAP: tm }); finalVariants.set(tm, m); }
+    const taps = (game.quality?.speedTaps | 0) === 4 ? 4 : 8;
+    const key = tm * 16 + taps;
+    let m = finalVariants.get(key);
+    if (!m) { m = mat(FINAL_FRAG, finalUniforms, { TONEMAP: tm, SPEED_TAPS: taps }); finalVariants.set(key, m); }
     return m;
   }
   const debugMat = mat(DEBUG_FRAG, {
@@ -723,10 +759,13 @@ export default function createPipeline(game) {
 
     // B — bloom mip chain.
     const bloomOn = q.bloom !== false && (grade.bloom ?? 0.7) > 0;
+    // (performance update: the cheap rungs run 4 or 5 of the 6 levels — the widest glow costs the least pixels but a
+    // whole pass each on a tile GPU)
+    const bloomN = clamp(Math.round(q.bloomLevels ?? BLOOM_LEVELS), 3, BLOOM_LEVELS);
     timed('bloom', () => {
     if (bloomOn) {
       let src = hdrRT.texture, sw = W, sh = H;
-      for (let i = 0; i < BLOOM_LEVELS; i++) {
+      for (let i = 0; i < bloomN; i++) {
         const m = i === 0 ? prefilterMat : downMat;
         m.uniforms.tIn.value = src;
         m.uniforms.uTexel.value.set(1 / sw, 1 / sh);
@@ -735,7 +774,7 @@ export default function createPipeline(game) {
         pass(m, bloomRTs[i]);
         src = bloomRTs[i].texture; sw = bloomRTs[i].width; sh = bloomRTs[i].height;
       }
-      for (let i = BLOOM_LEVELS - 1; i > 0; i--) {
+      for (let i = bloomN - 1; i > 0; i--) {
         const lo = bloomRTs[i];
         upMat.uniforms.tIn.value = lo.texture;
         upMat.uniforms.uTexel.value.set(1 / lo.width, 1 / lo.height);
@@ -772,6 +811,12 @@ export default function createPipeline(game) {
     state.kick *= Math.exp(-realDt * 6.5);
     if (state.kick < 0.003) state.kick = 0;
     fu.uKick.value = state.kick;
+    // boss update: what bossfx set this frame (nothing set: off)
+    {
+      const B = state.boss;
+      if (B.fresh) { fu.uBoss.value.set(B.x, B.y, B.energy * (B.onScreen ? 1 : 0), B.enrage); fu.uFlash.value = B.flash; B.fresh = false; }
+      else { fu.uBoss.value.z = 0; fu.uBoss.value.w = 0; fu.uFlash.value = 0; }
+    }
     fu.uTime.value = (fu.uTime.value + realDt) % 1000;
     fu.uSat.value = grade.saturation ?? 1.1;
     fu.uContrast.value = grade.contrast ?? 1.04;
@@ -849,6 +894,14 @@ export default function createPipeline(game) {
       return true;
     },
     /** effects update — an impact kick 0..1 (bloom swell, colour fringe, saturation); the strongest one running wins. */
+    /** boss update — the titan fight's screen effects for this frame (call every frame they should show):
+     *  { x, y (core uv), energy 0..1.5, enrage 0..1, flash 0..1, onScreen }. */
+    setBoss(o = {}) {
+      const B = state.boss;
+      B.x = clamp(+o.x || 0.5, -0.5, 1.5); B.y = clamp(+o.y || 0.5, -0.5, 1.5);
+      B.energy = clamp(+o.energy || 0, 0, 1.5); B.enrage = clamp(+o.enrage || 0, 0, 1);
+      B.flash = clamp(+o.flash || 0, 0, 1) * (reducedMotion ? 0.35 : 1); B.onScreen = o.onScreen !== false; B.fresh = true;
+    },
     kick(amount = 0.5) { state.kick = Math.max(state.kick, clamp(+amount || 0, 0, 1) * (reducedMotion ? 0.3 : 1)); },
     get impact() { return { kick: state.kick, ripples: state.ripples.map((r) => ({ ...r })) }; },
     /** Time every section on the next frame: resolves { scene, clouds, composite, fx, godrays, bloom, final, post }
@@ -868,6 +921,32 @@ export default function createPipeline(game) {
       return object;
     },
     init() { alloc(); },
+    /**
+     * performance update — hand every material in the scene to the driver now (the programs build in the background
+     * while the title is up) instead of on the frame that first shows it: the first fire breath, the first explosion,
+     * the titan breaking the clouds no longer stop the game for the length of a shader compile. ?warm=0 turns it off.
+     * Returns the number of materials prepared (0 when skipped).
+     */
+    warmup() {
+      if (params.get('warm') === '0' || typeof renderer.compile !== 'function') return 0;
+      alloc();
+      const prev = renderer.getRenderTarget();
+      const mask = camera.layers.mask;
+      let n = 0;
+      try {
+        renderer.setRenderTarget(sceneRT);          // the HDR targets are linear: the programs must be built for them
+        camera.layers.enableAll();
+        const set = renderer.compile(scene, camera);
+        n = set && set.size ? set.size : 0;
+      } catch (e) {
+        console.warn('[pipeline] shader warm-up skipped', e);
+      } finally {
+        camera.layers.mask = mask;
+        renderer.setRenderTarget(prev);
+      }
+      pipeline.stats.warmed = n;
+      return n;
+    },
     render(simDt, realDt) {
       try {
         renderFrame(realDt);

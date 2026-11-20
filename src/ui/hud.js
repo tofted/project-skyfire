@@ -484,7 +484,7 @@ export class DamageRoll {
 }
 
 export default function createHud(game) {
-  const settings = loadSettings(game.quality?.name);
+  const settings = loadSettings(game.qualityMode || game.quality?.name);
   if (!game.settings) game.settings = settings;       // shared read-only view for other systems (audio, camera)
   const nowReal = () => performance.now() / 1000;
 
@@ -706,6 +706,8 @@ export default function createHud(game) {
     /** (leaderboard update) The leaderboard on the board of the run just flown (the results screen's button). */
     openBoard() { try { const b = game.online?.last?.board; if (b && onlineUi) onlineUi.panels.leaderboard.board = b; } catch { /* the last board shown */ } openPanel('leaderboard'); },
     fs,
+    /** (performance update) The governor's read-out (Settings shows the frame rate beside the graphics mode). */
+    perf: () => game.perf?.stats || null,
     /** What Auto resolved to (Settings shows it): touch mode, minimal HUD. */
     mode: () => ({ touch, minimal, controls: settings.controls, hud: settings.hud }),
     // the pause menu's touch items: the same key edges the keyboard gives (V / P), taken by the camera in play

@@ -2,7 +2,7 @@
 // Every feature lives in a "system" (see docs/ARCHITECTURE.md). The core owns no gameplay.
 import * as THREE from 'three';
 import { Events } from './events.js';
-import { QUALITY, pickQuality } from './quality.js';
+import { MODES, pickMode, presetQuality, detectDevice, buildLadder, autoQuality, perfKey, loadRung, nearestRung, saveMode } from './quality.js';
 
 export const FIXED_HZ = 120;          // physics / AI / combat rate
 const FIXED_DT = 1 / FIXED_HZ;
@@ -14,12 +14,20 @@ export class Game {
     this.canvas = canvas;
     this.events = new Events();
     this.debugMode = params.has('debug');
-    this.quality = pickQuality(params.get('quality'));
 
     this.renderer = new THREE.WebGLRenderer({
       canvas, antialias: false, alpha: false, stencil: false,
       powerPreference: 'high-performance', preserveDrawingBuffer: params.has('capture'),
     });
+    // Quality: a fixed preset, or 'auto' (default) — a ladder built for this device that the frame-rate governor
+    // (core/perf.js, game.perf) climbs and descends to hold 60 fps. See core/quality.js.
+    let gl = null;
+    try { gl = this.renderer.getContext(); } catch { gl = null; }
+    this.device = detectDevice(gl, globalThis, params.get('gpu'));
+    this.qualityMode = pickMode(params.get('quality'));
+    this.auto = null;                  // { ladder: { rungs, start, prMax, top }, rung, key, shadowsOff } in the automatic mode
+    if (this.qualityMode === 'auto') this.quality = this._autoBoot();
+    else this.quality = presetQuality(this.qualityMode);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;   // the render pipeline tone-maps in its composite pass
     this.renderer.shadowMap.enabled = this.quality.shadows > 0;
@@ -172,10 +180,34 @@ export class Game {
     this.events.emit('resize', this.size);
   }
 
+  /** The automatic mode's ladder for the view as it is now and the rung to start on (the saved one, else the device
+   *  class's first-launch rung); returns that rung's quality object. */
+  _autoBoot() {
+    const w = Math.max(1, window.innerWidth), h = Math.max(1, window.innerHeight);
+    const ladder = buildLadder(this.device, w, h);
+    const key = perfKey(this.device, w, h);
+    const saved = this.params.has('fresh') ? null : loadRung(key);
+    const at = nearestRung(ladder.rungs, saved);
+    const rung = at >= 0 ? at : ladder.start;
+    const prev = this.auto;
+    this.auto = { ladder, rung, key, shadowsOff: !!(prev?.shadowsOff || saved?.shadowsOff), w, h };
+    return autoQuality(this.device, ladder.rungs[rung], { shadowsOff: this.auto.shadowsOff, index: rung });
+  }
+
+  /** Switch the graphics mode: 'auto' | 'low' | 'medium' | 'high' | 'ultra' (saved for the next launch). */
   setQuality(name) {
-    if (!QUALITY[name]) return;
+    if (!MODES.includes(name)) return;
+    this.qualityMode = name;
+    saveMode(name);
+    this.applyQuality(name === 'auto' ? this._autoBoot() : presetQuality(name));
+    this.events.emit('qualitymode', { mode: name });
+  }
+
+  /** Put a quality object in force (a preset, or a rung of the automatic ladder — core/perf.js). */
+  applyQuality(q) {
+    if (!q) return;
     const hadShadows = this.renderer.shadowMap.enabled;
-    this.quality = { ...QUALITY[name], name };
+    this.quality = q;
     this.renderer.shadowMap.enabled = this.quality.shadows > 0;
     if (hadShadows !== this.renderer.shadowMap.enabled) {
       // Programs compiled without the shadow map would draw one frame with a shadow sampler bound to a colour

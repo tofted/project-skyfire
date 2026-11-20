@@ -237,7 +237,7 @@ export default function createFx(game) {
     try {
       E = getParticles(game);
       orbs = createOrbs(game, E.tex, 96);
-      const n = { low: 0, medium: 2, high: 4, ultra: 4 }[game.quality?.name] ?? 4;
+      const n = { low: 0, medium: 2, high: 4, ultra: 4 }[game.quality?.tier || game.quality?.name] ?? 4;
       lights = createFireLights(game, n);
       ribbons = createRibbons(game, E.tex, 32, 20);
       try { arcs = createArcs(game, { maxRibbons: 224, points: 17, maxArcs: 190 }); } catch (e) { console.error('[fx] arcs init failed', e); arcs = null; }

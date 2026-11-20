@@ -59,6 +59,13 @@ export const CAMERA_TUNING = {
   camLead: 0.3,              // chase view: share of the aim lead the view looks toward (the rest stays on the course)
   courseLambda: 5.5, coursePitchLambda: 4.5,   // 1/s: the chase rig follows the flight direction (+ camLead × lead)
   kbLead: 22 * DEG, kbRate: 110 * DEG,         // A / D: keyboard turn — the target leads the course by 22° while held
+  // controls update — the touch stick turns by how far it leans (the keys it holds are still on / off): past stickDead
+  // of its sideways travel the target leads the course by up to stickLead (curve: gentle near the middle), so a small
+  // lean is a wide turn and a full lean a tight one, with no step where the 45° key sectors change.
+  stickTurn: true, stickDead: 0.14, stickLead: 30 * DEG, stickCurve: 1.25,
+  // controls update — aim slow-down (game.aimAssist sets it; 0 = off): with the reticle on a target (the magnet's or
+  // the lock assist's weight w) the look turns (1 − aimSlow · w) as fast, so the aim does not sweep past it.
+  aimSlow: 0,
   freeReturn: 4.5,           // 1/s swing back behind after free-look
   clearance: 3.0,            // m above terrain / sea
   shapeMargin: 3.0,          // m kept from big bodies (titan)
@@ -339,6 +346,7 @@ export default function createCameraRig(game) {
   const shakes = [];
   let breathShake = null;
   let lockTarget = null;
+  let steerSlow = 1, stickTurn = 0;   // (controls update) the look's slow-down on a target now, the stick's analog turn −1..1
   let lockUnavailable = false, lockRequestedAt = -1, lockedNow = false, lockLostAt = -1;
   let telegraphUntil = 0;
   let padPrev = [];
@@ -2124,8 +2132,11 @@ export default function createCameraRig(game) {
     if (!Number.isFinite(dx)) dx = 0;
     if (!Number.isFinite(dy)) dy = 0;
     const rx = pad ? Math.sign(pad.rx) * pad.rx * pad.rx : 0, ry = pad ? Math.sign(pad.ry) * pad.ry * pad.ry : 0;
-    const mx = dx * sens + rx * T.padRate * rdt;
-    const my = (dy * sens + ry * T.padRate * rdt) * inv;
+    // (controls update) on a target the look slows down — not the free look, not a cinematic
+    const slow = !freeHeld && T.aimSlow > 0 ? 1 - clamp(T.aimSlow, 0, 0.8) * clamp(Math.max(magnet.w, assist.w), 0, 1) : 1;
+    steerSlow = slow;
+    const mx = (dx * sens + rx * T.padRate * rdt) * slow;
+    const my = (dy * sens + ry * T.padRate * rdt) * inv * slow;
     if (freeHeld) {
       freeYaw = wrapAngle(freeYaw - mx);
       const lim = viewMode === 'rider' ? 70 * DEG : 80 * DEG;
@@ -2150,10 +2161,21 @@ export default function createCameraRig(game) {
       // A / D (arrows): keyboard turn on top of the mouse — while held, the target leads the course by kbLead to
       // that side (a sustained banked turn); released, the dragon finishes the turn to the target and levels out.
       // (hovering, A / D strafe — player.js — and never turn the aim)
-      const kb = hov ? 0 : (input.down('KeyD') || input.down('ArrowRight') ? 1 : 0) - (input.down('KeyA') || input.down('ArrowLeft') ? 1 : 0);
+      let kb = hov ? 0 : (input.down('KeyD') || input.down('ArrowRight') ? 1 : 0) - (input.down('KeyA') || input.down('ArrowLeft') ? 1 : 0);
+      let kbLead = T.kbLead, kbRate = T.kbRate;
+      // (controls update) the touch stick: an analog turn by its sideways lean (see stickTurn above)
+      const tu = game.touchUI;
+      if (!hov && T.stickTurn && tu && tu.active && tu.stick && tu.stick.active) {
+        const sx = +tu.stick.x || 0;
+        const a = clamp((Math.abs(sx) - T.stickDead) / Math.max(0.05, 1 - T.stickDead), 0, 1);
+        kb = a > 0 ? Math.sign(sx) : 0;
+        kbLead = T.stickLead * Math.pow(a, T.stickCurve);
+        kbRate = T.kbRate * (0.55 + 0.65 * a);
+        stickTurn = kb * a;
+      } else stickTurn = 0;
       if (kb) {
-        const d = wrapAngle(courseYaw - kb * T.kbLead - aimYaw);
-        if (d * -kb > 0) aimYaw = wrapAngle(aimYaw + Math.sign(d) * Math.min(Math.abs(d), T.kbRate * rdt));
+        const d = wrapAngle(courseYaw - kb * kbLead - aimYaw);
+        if (d * -kb > 0) aimYaw = wrapAngle(aimYaw + Math.sign(d) * Math.min(Math.abs(d), kbRate * rdt));
       }
       // A huge swing waits at most queueMax away from the course (never wraps into a turn the other way).
       aimYaw = wrapAngle(courseYaw + clamp(wrapAngle(aimYaw - courseYaw), -T.queueMax, T.queueMax));
@@ -2770,6 +2792,8 @@ export default function createCameraRig(game) {
     get mode() { return mode; },
     get viewMode() { return viewMode; },
     get lockTarget() { return lockTarget; },
+    /** (controls update) read-only: the look's slow-down factor on a target now (1 = none), the stick's analog turn. */
+    get steer() { return { slow: steerSlow, stick: stickTurn }; },
     get zoom() { return zoom; },
     set zoom(v) { zoom = clamp(v, T.zoomMin, T.zoomMax); },
     get pointerLocked() { return lockedNow; },

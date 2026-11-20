@@ -375,14 +375,19 @@ const NO_SHADOW = /* glsl */`float cloudShadow(vec3 p) { return 1.0; }`;
 // (80) and the terrain LOD selection (98, which the mirror reuses), before the pipeline draws the frame.
 function createReflection(game, water) {
   const q = game.quality || {};
-  const scale = { low: 0.3, medium: 0.4, high: 0.5, ultra: 0.6 }[q.name] ?? 0.5;
+  const tierOf = (qq) => qq.tier || qq.name;
+  const scaleOf = (qq) => qq.reflection ?? ({ low: 0.3, medium: 0.4, high: 0.5, ultra: 0.6 }[tierOf(qq)] ?? 0.5);
+  const scale = scaleOf(q);
   const R = {
-    enabled: WAVE4 && q.reflections !== false && (q.reflection ?? scale) > 0,
-    scale: q.reflection ?? scale,
+    // (performance update: the quality is read every frame — the automatic mode turns the mirror pass off and on and
+    // changes its size while the game runs; `ok` goes false for good only when the pass itself failed)
+    ok: WAVE4,
+    enabled: WAVE4 && q.reflections !== false && scale > 0,
+    scale,
     target: null, camera: new THREE.PerspectiveCamera(), plane: 0, planeTarget: 0, weight: 0, near: 0, active: false,
     // render every Nth frame (medium / low: every 2nd). The lookup always uses the matrices the target was drawn
     // with, so static banks stay exact between updates; only moving things in the mirror lag a frame
-    every: { low: 2, medium: 2 }[q.name] ?? 1,
+    every: { low: 2, medium: 2 }[tierOf(q)] ?? 1,
     stats: { w: 0, h: 0, ms: 0, calls: 0, tris: 0, frames: 0, skipped: '' },
   };
   let tick = 0;
@@ -435,7 +440,13 @@ function createReflection(game, water) {
     // near style follows the camera's height above the ground / water (full below ~450 m, gone by ~1 km)
     R.near += ((WAVE4 ? 1 - smoothstep(450, 1000, agl) : 0) - R.near) * damp(3, realDt || 0.016);
     u.uRefl.value.z = R.near;
-    if (!R.enabled || !r) { u.uRefl.value.x = 0; R.stats.skipped = 'off'; return; }
+    {
+      const qq = game.quality || {};
+      R.scale = scaleOf(qq);
+      R.every = { low: 2, medium: 2 }[tierOf(qq)] ?? 1;
+      R.enabled = R.ok && qq.reflections !== false && R.scale > 0;
+    }
+    if (!R.enabled || !r) { u.uRefl.value.x = 0; R.active = false; R.stats.skipped = 'off'; return; }
     const target = pickPlane(cam);
     if (target !== null) {
       R.planeTarget = target;
@@ -506,7 +517,7 @@ function createReflection(game, water) {
     } catch (err) {
       // never throw from a system: switch the planar reflection off and keep the analytic one
       console.error('[water] reflection pass failed; planar reflection disabled', err);
-      R.enabled = false; R.active = false; u.uRefl.value.x = 0;
+      R.ok = false; R.enabled = false; R.active = false; u.uRefl.value.x = 0;
     }
     R.stats.ms = R.stats.ms * 0.9 + (performance.now() - t0) * 0.1;
   }
